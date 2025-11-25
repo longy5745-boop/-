@@ -800,6 +800,84 @@ const ProductDetailView = ({ product, goBack }: { product: Product, goBack: () =
 // --- Main App Component ---
 
 const SmartPlatform = ({ setView }: { setView: (v: ViewState) => void }) => {
+    // Simulation States
+    const [efficiency, setEfficiency] = useState(98.2);
+    const [pendingOrders, setPendingOrders] = useState(12);
+    const [dispatchLogs, setDispatchLogs] = useState<string[]>([
+        "14:02 车辆 黑A·F8291 已到达 胜丰镇回收点",
+        "14:01 系统 自动派单：双城物流中心 -> 联兴村",
+        "14:00 农户 张*顺 提交了回收申请 (废旧地膜 50kg)"
+    ]);
+    
+    // Define fixed locations
+    const LOCATIONS = [
+        {x: 50, y: 50, name: '双城总仓'},
+        {x: 20, y: 20, name: '胜丰'}, 
+        {x: 80, y: 20, name: '兰棱'}, 
+        {x: 20, y: 80, name: '万隆'}, 
+        {x: 80, y: 80, name: '金城'}
+    ];
+
+    // Initialize trucks with target
+    const [trucks, setTrucks] = useState([
+        { id: 1, x: 20, y: 20, targetX: 50, targetY: 50, speed: 0.4, status: 'transport' },
+        { id: 2, x: 50, y: 50, targetX: 80, targetY: 80, speed: 0.3, status: 'transport' },
+        { id: 3, x: 80, y: 20, targetX: 20, targetY: 80, speed: 0.5, status: 'transport' }
+    ]);
+
+    // Live Efficiency & Pending Orders Update
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setEfficiency(prev => {
+                const change = (Math.random() - 0.5) * 0.4;
+                return Math.min(99.9, Math.max(95.0, prev + change));
+            });
+            setPendingOrders(prev => {
+                 // Randomly fluctuate between 8 and 15
+                 return Math.random() > 0.7 ? Math.floor(8 + Math.random() * 7) : prev;
+            });
+        }, 2000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Live Logs & Linear Truck Movement
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // 1. Add new log randomly
+            if (Math.random() > 0.6) {
+                const time = new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute:'2-digit'});
+                const events = [
+                    `车辆 黑A·${Math.floor(1000+Math.random()*9000)} 已接单`,
+                    `系统 优化路线完成，预计节省 ${Math.floor(Math.random()*20)}% 里程`,
+                    `农户 ${['李','王','张','赵'][Math.floor(Math.random()*4)]}*${['军','强','伟','敏'][Math.floor(Math.random()*4)]} 提交回收申请`,
+                    `车辆 黑A·${Math.floor(1000+Math.random()*9000)} 到达 万隆乡仓储点`
+                ];
+                setDispatchLogs(prev => [ `${time} ${events[Math.floor(Math.random()*events.length)]}`, ...prev.slice(0, 4) ]);
+            }
+
+            // 2. Move Trucks Linearly
+            setTrucks(prev => prev.map(t => {
+                // Calculate vector to target
+                const dx = t.targetX - t.x;
+                const dy = t.targetY - t.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 1) {
+                    // Reached target, pick new random target that isn't current pos
+                    const nextLoc = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+                    return { ...t, targetX: nextLoc.x, targetY: nextLoc.y };
+                } else {
+                    // Move towards target
+                    const vx = (dx / dist) * t.speed;
+                    const vy = (dy / dist) * t.speed;
+                    return { ...t, x: t.x + vx, y: t.y + vy };
+                }
+            }));
+
+        }, 100); // Faster update for smooth linear animation
+        return () => clearInterval(interval);
+    }, []);
+
     return (
         <section className="max-w-7xl mx-auto py-12 px-4">
             <div className="flex items-center justify-between mb-8">
@@ -808,7 +886,10 @@ const SmartPlatform = ({ setView }: { setView: (v: ViewState) => void }) => {
                     <h2 className="text-3xl font-bold text-gray-900">智慧平台核心能力</h2>
                 </div>
                  <div className="flex items-center gap-2">
-                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                     <span className="flex h-3 w-3 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
                      <span className="text-gray-500 text-sm">AI 调度系统实时运行中</span>
                  </div>
             </div>
@@ -823,60 +904,118 @@ const SmartPlatform = ({ setView }: { setView: (v: ViewState) => void }) => {
                              <i className="fa-solid fa-bolt text-blue-500"></i>
                              智能订单调度监控 (双城区域)
                          </div>
-                         <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded">卫星链路已连接</span>
+                         <div className="flex gap-2">
+                            <span className="bg-blue-50 text-blue-600 text-xs px-2 py-1 rounded border border-blue-100">在线车辆: 25</span>
+                            <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded animate-pulse">卫星链路已连接</span>
+                         </div>
                      </div>
 
-                     {/* Fake Map UI */}
+                     {/* Live Map UI */}
                      <div className="flex-1 bg-gray-50 rounded-xl relative overflow-hidden border border-gray-100">
                          {/* Grid Pattern */}
-                         <div className="absolute inset-0" style={{backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.5}}></div>
+                         <div className="absolute inset-0" style={{backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '30px 30px', opacity: 0.5}}></div>
                          
-                         {/* Map Elements */}
-                         <div className="absolute top-1/4 left-1/4 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
-                              <span className="bg-white px-2 py-1 rounded shadow text-xs font-bold mb-1">仓储中心</span>
-                              <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg animate-ping absolute opacity-50"></div>
-                              <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
+                         {/* Map Elements: Hubs */}
+                         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 group cursor-pointer">
+                              <span className="bg-white px-2 py-1 rounded shadow text-xs font-bold mb-1 border border-gray-200 whitespace-nowrap group-hover:bg-blue-600 group-hover:text-white transition">双城总仓</span>
+                              <div className="w-6 h-6 bg-blue-600 rounded-full border-4 border-white shadow-lg relative">
+                                  <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-20"></div>
+                              </div>
                          </div>
+                         
+                         {/* Random Villages/Hubs */}
+                         {[
+                             {x: 20, y: 20, name: '胜丰'}, {x: 80, y: 20, name: '兰棱'}, 
+                             {x: 20, y: 80, name: '万隆'}, {x: 80, y: 80, name: '金城'}
+                         ].map((loc, i) => (
+                             <div key={i} className="absolute flex flex-col items-center z-10" style={{top: `${loc.y}%`, left: `${loc.x}%`}}>
+                                <div className="w-3 h-3 bg-gray-400 rounded-full border-2 border-white shadow"></div>
+                                <span className="text-[10px] text-gray-500 mt-1">{loc.name}</span>
+                             </div>
+                         ))}
 
-                         <div className="absolute bottom-1/3 right-1/4 transform translate-x-1/2 translate-y-1/2 flex flex-col items-center z-10">
-                              <span className="bg-white px-2 py-1 rounded shadow text-xs font-bold mb-1">新订单</span>
-                              <div className="w-4 h-4 bg-orange-500 rounded-full border-2 border-white shadow-lg"></div>
-                         </div>
-
-                         {/* Path */}
-                         <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                             <path d="M200 150 Q 400 250 550 350" fill="none" stroke="#3b82f6" strokeWidth="2" strokeDasharray="6 4" className="animate-pulse"/>
-                             {/* Truck Icon moving */}
-                             <foreignObject x="350" y="240" width="100" height="40">
-                                 <div className="bg-white px-2 py-1 rounded shadow border border-blue-200 flex items-center gap-1 text-[10px] w-fit">
-                                     <i className="fa-solid fa-truck-fast text-blue-600"></i>
-                                     <span className="font-bold text-blue-900">运输中</span>
+                         {/* Moving Trucks */}
+                         {trucks.map(truck => (
+                             <div 
+                                key={truck.id}
+                                className="absolute z-20 flex flex-col items-center"
+                                // No transition needed here as we update frequently for linear motion, or use a very short linear transition
+                                style={{ top: `${truck.y}%`, left: `${truck.x}%`, transition: 'all 0.1s linear' }}
+                             >
+                                 <div className={`p-1 bg-white rounded-full shadow-md border ${truck.status === 'transport' ? 'border-green-500' : 'border-orange-500'}`}>
+                                     <i className={`fa-solid fa-truck-fast text-xs ${truck.status === 'transport' ? 'text-green-600' : 'text-orange-500'}`}></i>
                                  </div>
-                             </foreignObject>
-                         </svg>
+                                 {/* Trajectory Line (Optional visual) */}
+                                 {/* We don't draw lines in CSS easily without SVG overlay, simplified to just moving point */}
+                             </div>
+                         ))}
                      </div>
 
-                     {/* Floating Stats Card on Map */}
-                     <div className="absolute top-20 right-8 w-48 bg-white/90 backdrop-blur rounded-xl shadow-lg border border-blue-50 p-4 z-20">
-                         <p className="text-xs text-blue-600 font-bold mb-1">今日调度效率</p>
-                         <p className="text-4xl font-bold text-blue-600">98<span className="text-lg">%</span></p>
-                         <div className="w-full bg-blue-100 h-1.5 rounded-full mt-2">
-                             <div className="bg-blue-600 h-1.5 rounded-full" style={{width: '98%'}}></div>
+                     {/* Live Logs Overlay (Bottom Left) */}
+                     <div className="absolute bottom-6 left-6 w-72 bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200 p-3 z-20 overflow-hidden">
+                         <div className="text-xs font-bold text-gray-400 mb-2 flex items-center gap-1">
+                             <i className="fa-solid fa-terminal"></i> 系统实时日志
+                         </div>
+                         <div className="space-y-1.5 h-24 overflow-hidden relative">
+                             {/* Gradient fade at bottom */}
+                             <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
+                             {dispatchLogs.map((log, i) => (
+                                 <div key={i} className="text-[10px] text-gray-600 truncate animate-in slide-in-from-left-2 fade-in duration-300">
+                                     <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block mr-2"></span>
+                                     {log}
+                                 </div>
+                             ))}
                          </div>
                      </div>
 
-                     <div className="absolute top-48 right-8 w-48 bg-orange-50/90 backdrop-blur rounded-xl shadow-lg border border-orange-100 p-4 z-20">
-                         <p className="text-xs text-orange-600 font-bold mb-1">待回收申报订单</p>
-                         <p className="text-3xl font-bold text-orange-600">12 <span className="text-sm">单</span></p>
-                         <p className="text-[10px] text-gray-500 mt-1">双城区域平均响应：15分钟</p>
+                     {/* Floating Stats Card (Top Right) */}
+                     <div className="absolute top-20 right-8 w-48 bg-white/90 backdrop-blur rounded-xl shadow-lg border border-blue-50 p-4 z-20">
+                         <p className="text-xs text-blue-600 font-bold mb-1 flex justify-between">
+                             今日调度效率 
+                             <i className="fa-solid fa-chart-line"></i>
+                         </p>
+                         <p className="text-4xl font-bold text-blue-600 transition-all duration-500">
+                             {efficiency.toFixed(1)}<span className="text-lg">%</span>
+                         </p>
+                         <div className="w-full bg-blue-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                             <div 
+                                className="bg-blue-600 h-1.5 rounded-full transition-all duration-1000 ease-out" 
+                                style={{width: `${efficiency}%`}}
+                             ></div>
+                         </div>
                      </div>
 
+                     {/* Pending Orders Card (New - Top Left) */}
+                     <div className="absolute top-6 left-6 w-48 bg-white/90 backdrop-blur rounded-xl shadow-lg border border-orange-100 p-4 z-20">
+                         <p className="text-xs text-orange-600 font-bold mb-1 flex justify-between">
+                             待回收申报订单
+                             <i className="fa-regular fa-clipboard"></i>
+                         </p>
+                         <p className="text-4xl font-bold text-orange-500">
+                             {pendingOrders} <span className="text-lg text-gray-400 font-normal">单</span>
+                         </p>
+                         <p className="text-[10px] text-gray-400 mt-1">双城区域平均响应: 15分钟</p>
+                     </div>
+
+                     {/* Vehicle Status (Bottom Right) */}
                      <div className="absolute bottom-8 right-8 w-48 bg-white/90 backdrop-blur rounded-xl shadow-lg border border-gray-200 p-4 z-20">
                          <p className="text-xs text-gray-500 mb-2">车辆实时状态</p>
                          <ul className="text-xs space-y-2">
-                             <li className="flex justify-between"><span>黑A·F8291</span> <span className="text-green-600 bg-green-50 px-1 rounded">运输中</span></li>
-                             <li className="flex justify-between"><span>黑A·L9102</span> <span className="text-gray-500 bg-gray-100 px-1 rounded">待命</span></li>
-                             <li className="flex justify-between"><span>黑A·M7782</span> <span className="text-orange-600 bg-orange-50 px-1 rounded">装货中</span></li>
+                             <li className="flex justify-between items-center">
+                                 <span>黑A·F8291</span> 
+                                 <span className="flex h-2 w-2 relative">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                 </span>
+                             </li>
+                             <li className="flex justify-between items-center">
+                                 <span>黑A·L9102</span> 
+                                 <span className="text-[10px] text-gray-400">待命</span>
+                             </li>
+                             <li className="flex justify-between items-center">
+                                 <span>黑A·M7782</span> 
+                                 <span className="text-[10px] text-orange-500">装货中</span>
+                             </li>
                          </ul>
                      </div>
                 </div>
